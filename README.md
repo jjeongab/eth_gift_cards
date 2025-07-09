@@ -27,7 +27,8 @@ A decentralized gift card system built on Ethereum that allows users to purchase
 3. **For Demo:**
    - Connect MetaMask to localhost:8545
    - Import a Hardhat test account (private keys shown in Hardhat console)
-   - Buy a gift card with a code like "GIFT123" and 0.01 ETH
+   - send the test account ETH to the main account 
+   - Buy a gift card with  generated code and 0.01 ETH
    - Switch to another account and redeem with the same code
 
 The system is intentionally simple but fully functional. It demonstrates understanding of Solidity, Web3 integration, and testing practices while being easy to explain in an interview setting.

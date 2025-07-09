@@ -6,9 +6,13 @@ async function main() {
   const GiftCard = await hre.ethers.getContractFactory("GiftCard");
   const giftCard = await GiftCard.deploy();
 
-  await giftCard.deployed();
+  // New syntax - wait for deployment
+  await giftCard.waitForDeployment();
 
-  console.log("GiftCard contract deployed to:", giftCard.address);
+  // New syntax - get address
+  const address = await giftCard.getAddress();
+
+  console.log("GiftCard contract deployed to:", address);
 }
 
 main()
