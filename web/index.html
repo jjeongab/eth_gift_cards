@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ethereum Gift Card System</title>
-    <script src="https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+   <script src="https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -22,6 +22,24 @@
         h1 {
             color: #333;
             text-align: center;
+        }
+        .setup-info {
+            background-color: #fff3cd;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border: 1px solid #ffeaa7;
+        }
+        .setup-info h3 {
+            margin-top: 0;
+            color: #856404;
+        }
+        .setup-info code {
+            background-color: #f5f5f5;
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-size: 12px;
+            word-break: break-all;
         }
         .section {
             margin: 30px 0;
@@ -53,6 +71,12 @@
             background-color: #ccc;
             cursor: not-allowed;
         }
+        .generate-btn {
+            background-color: #2196F3;
+        }
+        .generate-btn:hover {
+            background-color: #0b7dda;
+        }
         .status {
             margin-top: 20px;
             padding: 15px;
@@ -81,25 +105,104 @@
             background-color: #e9ecef;
             border-radius: 5px;
         }
+        .balance-info {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .code-generator {
+            background-color: #f0f8ff;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            border: 1px solid #b6d4fe;
+        }
+        .generated-code {
+            font-family: monospace;
+            font-size: 18px;
+            color: #0066cc;
+            padding: 10px;
+            background-color: white;
+            border: 2px dashed #0066cc;
+            border-radius: 5px;
+            margin-top: 10px;
+            text-align: center;
+        }
+        .code-history {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .code-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px;
+            margin: 5px 0;
+            background-color: white;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+        .copy-btn {
+            background-color: #6c757d;
+            font-size: 12px;
+            padding: 5px 10px;
+        }
+        .copy-btn:hover {
+            background-color: #5a6268;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>🎁 Ethereum Gift Card System</h1>
         
+        <!-- Setup Instructions -->
+        <div class="setup-info" id="setupInfo">
+            <h3>⚠️ Setup Required</h3>
+            <p><strong>1. Make sure Hardhat is running:</strong></p>
+            <code>npx hardhat node</code>
+            
+            <p style="margin-top: 10px;"><strong>2. Deploy the contract and update CONTRACT_ADDRESS in this file</strong></p>
+            
+            <p style="margin-top: 10px;"><strong>3. Import this private key to MetaMask:</strong></p>
+            <code>0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80</code>
+            
+            <p style="margin-top: 10px;"><strong>4. Add Hardhat network to MetaMask:</strong></p>
+            <p style="margin-left: 20px;">RPC URL: <code>http://127.0.0.1:8545</code><br>
+            Chain ID: <code>31337</code></p>
+        </div>
+        
         <div class="wallet-info">
             <div id="walletStatus">Not connected to wallet</div>
+            <div id="balanceInfo" class="balance-info"></div>
             <button id="connectWallet" onclick="connectWallet()">Connect MetaMask</button>
         </div>
 
         <div class="section">
             <h2>Buy Gift Card</h2>
+            
+            <!-- Code Generator -->
+            <div class="code-generator">
+                <h3>📝 Generate Random Code</h3>
+                <button class="generate-btn" onclick="generateGiftCode()">Generate New Code</button>
+                <div id="generatedCodeDisplay" class="generated-code" style="display: none;"></div>
+            </div>
+            
             <div>
                 <input type="text" id="buyCode" placeholder="Enter gift card code" />
                 <input type="number" id="ethAmount" placeholder="ETH amount" step="0.001" min="0.001" />
                 <button onclick="buyGiftCard()">Buy Gift Card</button>
             </div>
             <div id="buyStatus" class="status"></div>
+            
+            <!-- Code History -->
+            <div id="codeHistory" class="code-history" style="display: none;">
+                <h4>📋 Your Gift Card Codes</h4>
+                <div id="codeHistoryList"></div>
+            </div>
         </div>
 
         <div class="section">
@@ -123,12 +226,106 @@
             "event GiftCardRedeemed(bytes32 indexed codeHash, address redeemer, uint256 value)"
         ];
 
-        // Replace with your deployed contract address
-        const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3"; // Default Hardhat address
+        // IMPORTANT: Replace with your actual deployed contract address!
+        // Run: npx hardhat run scripts/deploy.js --network localhost
+        // And use the address it gives you
+        const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3"; // UPDATE THIS!
 
         let provider;
         let signer;
         let contract;
+        let purchasedCodes = [];
+
+        // Update balance
+        async function updateBalance() {
+            if (!signer) return;
+            
+            try {
+                const address = await signer.getAddress();
+                const balance = await provider.getBalance(address);
+                const balanceInEth = ethers.utils.formatEther(balance);
+                
+                document.getElementById('balanceInfo').textContent = `Balance: ${parseFloat(balanceInEth).toFixed(4)} ETH`;
+                
+                // Hide setup info if everything looks good
+                if (parseFloat(balanceInEth) > 1) {
+                    document.getElementById('setupInfo').style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Error fetching balance:', error);
+            }
+        }
+
+        // Load purchased codes from localStorage
+        function loadPurchasedCodes() {
+            const saved = localStorage.getItem('giftCardCodes');
+            if (saved) {
+                purchasedCodes = JSON.parse(saved);
+                displayCodeHistory();
+            }
+        }
+
+        // Save purchased codes to localStorage
+        function savePurchasedCodes() {
+            localStorage.setItem('giftCardCodes', JSON.stringify(purchasedCodes));
+        }
+
+        // Generate random gift card code
+        function generateGiftCode() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let code = 'GIFT-';
+            
+            // Generate 3 groups of 4 characters
+            for (let group = 0; group < 3; group++) {
+                if (group > 0) code += '-';
+                for (let i = 0; i < 4; i++) {
+                    code += chars[Math.floor(Math.random() * chars.length)];
+                }
+            }
+            
+            // Display the generated code
+            const display = document.getElementById('generatedCodeDisplay');
+            display.textContent = code;
+            display.style.display = 'block';
+            
+            // Auto-fill the buy code input
+            document.getElementById('buyCode').value = code;
+            
+            // Show a tip
+            showStatus('buyStatus', 'Code generated and auto-filled! Now set the ETH amount and buy.', 'info');
+            
+            return code;
+        }
+
+        // Copy code to clipboard
+        function copyToClipboard(code) {
+            navigator.clipboard.writeText(code).then(() => {
+                // Also fill the redeem input for convenience
+                document.getElementById('redeemCode').value = code;
+                showStatus('redeemStatus', 'Code copied! You can now redeem it.', 'info');
+            }).catch(() => {
+                // Fallback for older browsers
+                document.getElementById('redeemCode').value = code;
+                showStatus('redeemStatus', 'Code filled in redeem field!', 'info');
+            });
+        }
+
+        // Display code history
+        function displayCodeHistory() {
+            if (purchasedCodes.length === 0) return;
+            
+            const historyDiv = document.getElementById('codeHistory');
+            const listDiv = document.getElementById('codeHistoryList');
+            
+            listDiv.innerHTML = purchasedCodes.map((item, index) => `
+                <div class="code-item">
+                    <span>${item.code} (${item.amount} ETH)</span>
+                    <button class="copy-btn" onclick="copyToClipboard('${item.code}')">Copy</button>
+                </div>
+            `).join('');
+            
+            historyDiv.style.display = 'block';
+        }
 
         async function connectWallet() {
             if (typeof window.ethereum !== 'undefined') {
@@ -136,6 +333,16 @@
                     await window.ethereum.request({ method: 'eth_requestAccounts' });
                     provider = new ethers.providers.Web3Provider(window.ethereum);
                     signer = provider.getSigner();
+                    
+                    const network = await provider.getNetwork();
+                    console.log('Connected to network:', network);
+                    
+                    // Check if on Hardhat network
+                    if (network.chainId !== 31337 && network.chainId !== 1337) {
+                        showStatus('buyStatus', 'Wrong network! Please switch to Hardhat (localhost:8545) in MetaMask', 'error');
+                        return;
+                    }
+                    
                     contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
                     
                     const address = await signer.getAddress();
@@ -143,7 +350,16 @@
                     document.getElementById('connectWallet').textContent = 'Connected';
                     document.getElementById('connectWallet').disabled = true;
                     
-                    showStatus('buyStatus', 'Wallet connected successfully!', 'success');
+                    // Update balance
+                    await updateBalance();
+                    
+                    // Verify it's the test account
+                    if (address.toLowerCase() === '0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266') {
+                        showStatus('buyStatus', 'Connected to Hardhat test account #0!', 'success');
+                    } else {
+                        showStatus('buyStatus', 'Wallet connected successfully!', 'success');
+                    }
+                    
                 } catch (error) {
                     showStatus('buyStatus', 'Failed to connect wallet: ' + error.message, 'error');
                 }
@@ -183,10 +399,27 @@
                 await tx.wait();
                 
                 showStatus('buyStatus', `Gift card purchased successfully! Code: ${code}, Value: ${ethAmount} ETH`, 'success');
+                
+                // Save to history
+                purchasedCodes.unshift({
+                    code: code,
+                    amount: ethAmount,
+                    date: new Date().toISOString()
+                });
+                savePurchasedCodes();
+                displayCodeHistory();
+                
+                // Clear inputs
                 document.getElementById('buyCode').value = '';
                 document.getElementById('ethAmount').value = '';
+                document.getElementById('generatedCodeDisplay').style.display = 'none';
+                
+                // Update balance
+                await updateBalance();
+                
             } catch (error) {
-                showStatus('buyStatus', 'Error: ' + error.message, 'error');
+                console.error('Transaction error:', error);
+                showStatus('buyStatus', 'Error: ' + (error.reason || error.message), 'error');
             }
         }
 
@@ -213,8 +446,12 @@
                 
                 showStatus('redeemStatus', 'Gift card redeemed successfully! Check your wallet balance.', 'success');
                 document.getElementById('redeemCode').value = '';
+                
+                // Update balance
+                await updateBalance();
+                
             } catch (error) {
-                showStatus('redeemStatus', 'Error: ' + error.message, 'error');
+                showStatus('redeemStatus', 'Error: ' + (error.reason || error.message), 'error');
             }
         }
 
@@ -223,10 +460,18 @@
             statusElement.textContent = message;
             statusElement.className = 'status ' + type;
             statusElement.style.display = 'block';
+            
+            // Auto-hide info and success messages
+            if (type === 'success' || type === 'info') {
+                setTimeout(() => {
+                    statusElement.style.display = 'none';
+                }, 5000);
+            }
         }
 
         // Auto-connect if wallet is already connected
         window.addEventListener('load', async () => {
+            loadPurchasedCodes();
             if (window.ethereum && window.ethereum.selectedAddress) {
                 await connectWallet();
             }

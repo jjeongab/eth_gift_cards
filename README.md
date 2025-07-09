@@ -15,7 +15,7 @@ A decentralized gift card system built on Ethereum that allows users to purchase
 
 1. **For Deployment:**
    - Run `npm install` to install dependencies
-   - Run `npm run node` to start local Hardhat network
+   - Run `npm run node` or `npx hardhat node` to start local Hardhat network
    - Run `npm run deploy` to deploy the contract
    - Run `npm run serve` to start the web server
    - Update the contract address in `index.html`
